@@ -1,0 +1,260 @@
+#!/usr/bin/env bash
+
+set -e
+
+if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
+    echo "This script requires bash version 4+"
+    exit 1
+fi
+
+
+RANDOM_TOKEN=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)
+
+REDIS_HOST=${REDIS_HOST:-localhost}
+REDIS_PORT=${REDIS_PORT:-6379}
+REDIS_DB=${REDIS_DB:-}
+REDIS_AUTH=${REDIS_AUTH:-}
+REDIS_CON_MAX_RETRY=${CON_MAX_RETRY:-60}
+
+LOCK_KEY=${REDIS_LOCK_KEY:-rlock-sh}
+LOCK_TTL_MILI=${REDIS_LOCK_TTL:-300}000
+LOCK_ACQUIRE_TIMEOUT=${LOCK_ACQUIRE_TIMEOUT:-150}
+
+VERBOSE=${VERBOSE:-}
+
+
+while getopts "l:h:d:p:a:c:t:T:v" opt; do
+    case ${opt} in
+        l) LOCK_KEY=${OPTARG};;
+        h) REDIS_HOST=${OPTARG};;
+        d) REDIS_DB=${OPTARG};;
+        p) REDIS_PORT=${OPTARG};;
+        a) REDIS_AUTH=${OPTARG};;
+        c) REDIS_CON_MAX_RETRY=${OPTARG};;
+        t) LOCK_TTL_MILI=${OPTARG}000;;
+        T) LOCK_ACQUIRE_TIMEOUT=${OPTARG};;
+        v) VERBOSE=1;;
+    esac
+done
+
+shift $((${OPTIND} - 1))
+
+
+if [ -z "$REDIS_HOST" ]; then
+  echo "rlock-sh: INPUT ERROR host cannot be empty!" >&2
+  exit 1
+fi
+
+if [ -z "$REDIS_PORT" ]; then
+  echo "rlock-sh: INPUT ERROR port cannot be empty!" >&2
+  exit 1
+fi
+
+if [ -z "$REDIS_CON_MAX_RETRY" ] || [ "$REDIS_CON_MAX_RETRY" -le 0 ]; then
+  echo "rlock-sh: INPUT ERROR connection max retry must be greater than zero!" >&2
+  exit 1
+fi
+
+if [ -z "$LOCK_KEY" ]; then
+  echo "rlock-sh: INPUT ERROR lock key name cannot be empty!" >&2
+  exit 1
+fi
+
+if [ -z "$LOCK_TTL_MILI" ] || [ "$LOCK_TTL_MILI" -le 0 ]; then
+  echo "rlock-sh: INPUT ERROR lock TTL (seconds) must be positive!" >&2
+  exit 1
+fi
+
+if [ -z "$LOCK_ACQUIRE_TIMEOUT" ] || [ "$LOCK_ACQUIRE_TIMEOUT" -lt 0 ]; then
+  echo "rlock-sh: INPUT ERROR lock acquire timeout (seconds) must be non negative!" >&2
+  exit 1
+fi
+
+
+
+
+function redis-cmd {
+  local fd=$1
+  shift;
+
+  if [ ${#} -eq 0 ]; then
+    echo "rlock-sh: Error, expected arguments for redis-cmd and none given!"
+    exit 1
+  fi
+
+  local arguments=( "${@}" )
+  local command=("*$[${#arguments[@]}]")
+
+  for ((i=0;i<${#arguments[@]};i++)); do
+    command=( "${command[@]}" "\$${#arguments[${i}]}" "${arguments[${i}]}" )
+  done
+
+
+  printf "%s\r\n" "${command[@]}" >&${fd}
+
+  if ! redis-read $fd; then
+    return 1
+  fi
+}
+
+function redis-read {
+  local fd=$1
+  local result
+  local i
+
+  read -r -u ${fd}
+
+  if [ ${#REPLY} -eq 0 ]; then
+      echo "ERROR: no reply" >&2
+      exit 1
+  fi
+
+  REPLY=${REPLY:0:${#REPLY}-1}
+
+  case ${REPLY} in
+    :*) # integer
+      result=( "${REPLY:1}" )
+      ;;
+
+    +*) # message
+      result=( "${REPLY:1}" )
+      ;;
+
+    # error
+    -*|\$-*)
+      echo "${REPLY:1}"
+      return 1
+      ;;
+
+    # message size
+    \$*)
+      if [ ${REPLY:1} -gt 0 ]; then
+        # read message when size non-zero
+        read -r -N $[${REPLY:1}+2] -u "${fd}"
+      fi
+
+      result=( "${REPLY:0:(-2)}" )
+      ;;
+
+    \**)
+      echo "flock-sh: ERROR bulk reply not supported"
+      exit 1
+      ;;
+
+    *)
+      echo "rlock-sh: ERROR cannot parse response!"
+      exit 1
+      ;;
+  esac
+
+  printf "%s\n" "${result[@]}"
+}
+
+
+function acquire-lock {
+  local start_time=$(date +%s)
+  local time_trying=0
+
+  if [ -n "$VERBOSE" ]; then
+    echo "rlock-sh: acquiring lock ($LOCK_KEY=$RANDOM_TOKEN)" >&2
+  fi
+
+  while [ $time_trying -lt $LOCK_ACQUIRE_TIMEOUT ] || [ $LOCK_ACQUIRE_TIMEOUT -eq 0 ]; do
+
+    # Acquire lock by creating key with SET using NX flag which fails if key already exists
+    response=$(redis-cmd 4 SET $LOCK_KEY $RANDOM_TOKEN NX PX $LOCK_TTL_MILI)
+
+    if [ "$response" = "OK" ]; then
+      # success!
+      current_time=$(date +%s)
+      time_trying=$(( current_time - start_time ))
+
+      if [ -n "$VERBOSE" ];then
+        echo "rlock-sh: lock acquired after $time_trying seconds" >&2
+      fi
+
+      # true
+      return 0
+    fi
+
+    sleep 0.25
+
+    current_time=$(date +%s)
+    time_trying=$(( current_time - start_time ))
+  done
+
+  # timeout, return false
+  return 1;
+}
+
+
+function release-lock {
+  if [ -n "$VERBOSE" ]; then
+    echo "rlock-sh: releasing lock" >&2
+  fi
+
+  # This Lua script deletes lock key only if it holds
+  # specified value (rnadom token).
+  # We do that to avoid deleting lock created by others.
+  local lock_release_script='
+    if redis.call("get",KEYS[1]) == ARGV[1] then
+      return redis.call("del",KEYS[1])
+    else
+        return 0
+    end
+  '
+
+  redis-cmd 4 EVAL "$lock_release_script" 1 $LOCK_KEY $RANDOM_TOKEN > /dev/null
+  # tell server that we are finishing
+  redis-cmd 4 QUIT > /dev/null
+  # close the connection
+  exec 6>&-
+}
+
+
+# Connect and Redis and andauthorize when needed
+
+connection_attempts=0
+until exec 4<>/dev/tcp/"$REDIS_HOST"/"$REDIS_PORT"; do
+    connection_attempts=$(( connection_attempts + 1 ))
+
+    if [ $connection_attempts -ge $REDIS_CON_MAX_RETRY ]; then
+        exit 1
+    fi
+
+    sleep 1
+done
+
+
+if [ "${REDIS_AUTH}" != "" ]; then
+    if [ -n "$VERBOSE" ]; then
+      echo "rlock-sh: authenticating"
+    fi
+
+    if ! response=$(redis-cmd 4 AUTH "$REDIS_AUTH"); then
+      echo "rlock-sh: $response" >&2
+      exit 1
+    fi
+fi
+
+if [ "${REDIS_DB}" != "" ]; then
+    if [ -n "$VERBOSE" ]; then
+      echo "rlock-sh: select db '$REDIS_DB'"
+    fi
+
+    if ! response=$(redis-cmd 4 SELECT "$REDIS_DB"); then
+      echo "rlock-sh: $response" >&2
+      exit 1
+    fi
+fi
+
+
+if acquire-lock; then
+  trap release-lock EXIT
+
+  # execute commands
+  "$@"
+fi
+
+
+
