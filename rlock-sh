@@ -152,6 +152,7 @@ function redis-read {
 
 
 function acquire-lock {
+  local fd=$1
   local start_time=$(date +%s)
   local time_trying=0
 
@@ -162,7 +163,7 @@ function acquire-lock {
   while [ $time_trying -lt $LOCK_ACQUIRE_TIMEOUT ] || [ $LOCK_ACQUIRE_TIMEOUT -eq 0 ]; do
 
     # Acquire lock by creating key with SET using NX flag which fails if key already exists
-    response=$(redis-cmd 4 SET $LOCK_KEY $RANDOM_TOKEN NX PX $LOCK_TTL_MILI)
+    response=$(redis-cmd $fd SET $LOCK_KEY $RANDOM_TOKEN NX PX $LOCK_TTL_MILI)
 
     if [ "$response" = "OK" ]; then
       # success!
@@ -189,6 +190,8 @@ function acquire-lock {
 
 
 function release-lock {
+  local fd=$1
+
   if [ -n "$VERBOSE" ]; then
     echo "rlock-sh: releasing lock" >&2
   fi
@@ -204,9 +207,9 @@ function release-lock {
     end
   '
 
-  redis-cmd 4 EVAL "$lock_release_script" 1 $LOCK_KEY $RANDOM_TOKEN > /dev/null
+  redis-cmd $fd EVAL "$lock_release_script" 1 $LOCK_KEY $RANDOM_TOKEN > /dev/null
   # tell server that we are finishing
-  redis-cmd 4 QUIT > /dev/null
+  redis-cmd $fd QUIT > /dev/null
   # close the connection
   exec 6>&-
 }
@@ -249,8 +252,8 @@ if [ "${REDIS_DB}" != "" ]; then
 fi
 
 
-if acquire-lock; then
-  trap release-lock EXIT
+if acquire-lock 4; then
+  trap "release-lock 4" EXIT
 
   # execute commands
   "$@"
