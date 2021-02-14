@@ -6,7 +6,7 @@ Utility similar to `flock` but works with Redis as backend and it is implemented
 
 Example usage. Run this in two terminals in same time:
 
-```
+```bash
 rlock-sh -v -h 127.0.0.1 -p 6379 -l my-lock-key-name bash <<EOF
     echo Those lines are synchronized
     sleep 10
@@ -29,5 +29,37 @@ rlock-sh: acquiring lock (my-lock-key-name=B0oc2HvLEZs485fqRO9wzz26xc6zHVcd)
 rlock-sh: lock acquired after 10 seconds
 Those lines are synchronized
 rlock-sh: releasing lock
+```
+
+## Help:
+
+```
+Usage:
+
+  rlock-sh [options...] [cmd] [cmd options...]
+  rlock-sh [options...] -- [cmd] [cmd options...]
+
+Options:
+
+  -h|--help                        Show this usage help
+  -v|--verbose                     Print debug information on stderr
+
+  -l|--lock-name=REDIS_LOCK_KEY    (string) Name of the key that will be created (default: rlock-sh)
+  -t|--lock-ttl=REDIS_LOCK_TTL     (int) Number of seconds for lock TTL (default: 300)
+
+  -H|--host=REDIS_HOST             (string) Redis host name or ip (default: 127.0.0.1)
+  -p|--port=REDIS_PORT             (int) Redis TCP port (default: 6379)
+  -d|--database=REDIS_DB           (int) Redis database to select (default: none)
+  -a|--auth=REDIS_AUTH             (string) Redis authentication (default: none)
+
+  -r|--connect-max-retry=CON_MAX_RETRY
+                                   (int) Maximum number of connection attempts (default: 60)
+
+  -T|--acquire-timeout=LOCK_ACQUIRE_TIMEOUT
+                                   (int) Temeout for acquiring lock in seconds (default: 60)
+
+  -S|--acquire-sleep=LOCK_ACQUIRE_SLEEP
+                                   (int|float) Time in second to sleep betwean lock acquire retries (default: 60)
+                                   Not on every system `sleep` command can receive fraction. See man pages for sleep on your system.
 ```
 

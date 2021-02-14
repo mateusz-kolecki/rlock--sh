@@ -10,34 +10,151 @@ fi
 
 RANDOM_TOKEN=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)
 
-REDIS_HOST=${REDIS_HOST:-localhost}
+# Defaults
+REDIS_HOST=${REDIS_HOST:-127.0.0.1}
 REDIS_PORT=${REDIS_PORT:-6379}
 REDIS_DB=${REDIS_DB:-}
 REDIS_AUTH=${REDIS_AUTH:-}
 REDIS_CON_MAX_RETRY=${CON_MAX_RETRY:-60}
 
 LOCK_KEY=${REDIS_LOCK_KEY:-rlock-sh}
-LOCK_TTL_MILI=${REDIS_LOCK_TTL:-300}000
+LOCK_TTL=${REDIS_LOCK_TTL:-300}
 LOCK_ACQUIRE_TIMEOUT=${LOCK_ACQUIRE_TIMEOUT:-150}
+LOCK_ACQUIRE_SLEEP=${LOCK_ACQUIRE_SLEEP:-1}
 
-VERBOSE=${VERBOSE:-}
+VERBOSE=''
+
+NAME=$(basename $0)
+
+function show-usage {
+  echo "Usage:"
+  echo
+  echo "  $NAME [options...] [cmd] [cmd options...]"
+  echo "  $NAME [options...] -- [cmd] [cmd options...]"
+  echo
+  echo "Options:"
+  echo
+  echo "  -h|--help                        Show this usage help"
+  echo "  -v|--verbose                     Print debug information on stderr"
+  echo
+  echo "  -l|--lock-name=REDIS_LOCK_KEY    (string) Name of the key that will be created (default: $LOCK_KEY)"
+  echo "  -t|--lock-ttl=REDIS_LOCK_TTL     (int) Number of seconds for lock TTL (default: $LOCK_TTL)"
+  echo
+  echo "  -H|--host=REDIS_HOST             (string) Redis host name or ip (default: $REDIS_HOST)"
+  echo "  -p|--port=REDIS_PORT             (int) Redis TCP port (default: $REDIS_PORT)"
+  echo "  -d|--database=REDIS_DB           (int) Redis database to select (default: none)"
+  echo "  -a|--auth=REDIS_AUTH             (string) Redis authentication (default: none)"
+  echo
+  echo "  -r|--connect-max-retry=CON_MAX_RETRY"
+  echo "                                   (int) Maximum number of connection attempts (default: $REDIS_CON_MAX_RETRY)"
+  echo
+  echo "  -T|--acquire-timeout=LOCK_ACQUIRE_TIMEOUT"
+  echo "                                   (int) Temeout for acquiring lock in seconds (default: $REDIS_CON_MAX_RETRY)"
+  echo
+  echo "  -S|--acquire-sleep=LOCK_ACQUIRE_SLEEP"
+  echo "                                   (int|float) Time in second to sleep betwean lock acquire retries (default: $REDIS_CON_MAX_RETRY)"
+  echo "                                   Not on every system \`sleep\` command can receive fraction. See man pages for sleep on your system."
+  echo
+}
 
 
-while getopts "l:h:d:p:a:c:t:T:v" opt; do
-    case ${opt} in
-        l) LOCK_KEY=${OPTARG};;
-        h) REDIS_HOST=${OPTARG};;
-        d) REDIS_DB=${OPTARG};;
-        p) REDIS_PORT=${OPTARG};;
-        a) REDIS_AUTH=${OPTARG};;
-        c) REDIS_CON_MAX_RETRY=${OPTARG};;
-        t) LOCK_TTL_MILI=${OPTARG}000;;
-        T) LOCK_ACQUIRE_TIMEOUT=${OPTARG};;
-        v) VERBOSE=1;;
-    esac
+shortoptions='+l:t:H:p:d:a:r:T:S:vh'
+longoptions_list=(
+  'lock-name:'
+  'lock-ttl:'
+  'host:'
+  'port:'
+  'database:'
+  'auth:'
+  'connect-max-retry:'
+  'acquire-timeout:'
+  'acquire-sleep:'
+  'verbose'
+  'help'
+)
+
+longoptions=$(printf ",%s" ${longoptions_list[@]})
+
+if ! options=$(getopt \
+    --name="$NAME" \
+    --shell=bash \
+    --options="$shortoptions" \
+    --longoptions="${longoptions:1}" \
+    -- "$@" )
+then
+    show-usage >&2
+    exit 1
+fi
+
+eval set -- "$options"
+
+while true; do
+  case "$1" in
+    -l|--lock-name)
+      LOCK_KEY="$2"
+      shift 2
+      continue;;
+
+    -t|--lock-ttl)
+      LOCK_TTL="${2}"
+      shift 2
+      continue;;
+
+    -H|--host)
+      REDIS_HOST="$2"
+      shift 2
+      continue;;
+
+    -p|--port)
+      REDIS_PORT="$2"
+      shift 2
+      continue;;
+
+    -d|--database)
+      REDIS_DB="$2"
+      shift 2
+      continue;;
+
+    -a|--auth)
+      REDIS_AUTH="$2"
+      shift 2
+      continue;;
+
+    -r|--connect-max-retry)
+      REDIS_CON_MAX_RETRY="$2"
+      shift 2
+      continue;;
+
+    -T|--acquire-timeout)
+      LOCK_ACQUIRE_TIMEOUT="$2"
+      shift 2
+      continue;;
+
+    -S|--acquire-sleep)
+      LOCK_ACQUIRE_SLEEP="$2"
+      shift 2
+      continue;;
+
+    -v|--verbose)
+      VERBOSE=1
+      shift
+      continue;;
+
+    -h|--help)
+      show-usage
+      exit;;
+
+    --)
+      shift
+      break;;
+
+    *)
+      echo "rlock-sh: Error unknow option '$1'" >&2
+      echo >&2
+      show-usage >&2
+      exit 1;;
+  esac
 done
-
-shift $((${OPTIND} - 1))
 
 
 if [ -z "$REDIS_HOST" ]; then
@@ -60,13 +177,18 @@ if [ -z "$LOCK_KEY" ]; then
   exit 1
 fi
 
-if [ -z "$LOCK_TTL_MILI" ] || [ "$LOCK_TTL_MILI" -le 0 ]; then
+if [ -z "$LOCK_TTL" ] || [ "$LOCK_TTL" -le 0 ]; then
   echo "rlock-sh: INPUT ERROR lock TTL (seconds) must be positive!" >&2
   exit 1
 fi
 
 if [ -z "$LOCK_ACQUIRE_TIMEOUT" ] || [ "$LOCK_ACQUIRE_TIMEOUT" -lt 0 ]; then
   echo "rlock-sh: INPUT ERROR lock acquire timeout (seconds) must be non negative!" >&2
+  exit 1
+fi
+
+if [ -z "$LOCK_ACQUIRE_SLEEP" ] || [ "${LOCK_ACQUIRE_SLEEP:0:1}" = "-" ]; then
+  echo "rlock-sh: INPUT ERROR lock acquire sleep (seconds) must be non negative!" >&2
   exit 1
 fi
 
@@ -155,15 +277,16 @@ function acquire-lock {
   local fd=$1
   local start_time=$(date +%s)
   local time_trying=0
+  local lock_ttl_mili=$(( LOCK_TTL * 1000 ))
 
   if [ -n "$VERBOSE" ]; then
     echo "rlock-sh: acquiring lock ($LOCK_KEY=$RANDOM_TOKEN)" >&2
   fi
 
-  while [ $time_trying -lt $LOCK_ACQUIRE_TIMEOUT ] || [ $LOCK_ACQUIRE_TIMEOUT -eq 0 ]; do
+  while [ $LOCK_ACQUIRE_TIMEOUT -eq 0 ] || [ $time_trying -lt $LOCK_ACQUIRE_TIMEOUT ]; do
 
     # Acquire lock by creating key with SET using NX flag which fails if key already exists
-    response=$(redis-cmd $fd SET $LOCK_KEY $RANDOM_TOKEN NX PX $LOCK_TTL_MILI)
+    response=$(redis-cmd $fd SET $LOCK_KEY $RANDOM_TOKEN NX PX $lock_ttl_mili)
 
     if [ "$response" = "OK" ]; then
       # success!
@@ -178,13 +301,15 @@ function acquire-lock {
       return 0
     fi
 
-    sleep 0.25
+    sleep "$LOCK_ACQUIRE_SLEEP"
 
     current_time=$(date +%s)
     time_trying=$(( current_time - start_time ))
   done
 
-  # timeout, return false
+  if [ -n "$VERBOSE" ]; then
+    echo "rlock-sh: ERROR acquire lock timeout" >&2
+  fi
   return 1;
 }
 
@@ -215,7 +340,9 @@ function release-lock {
 }
 
 
-# Connect and Redis and andauthorize when needed
+
+
+# Connect to Redis and andauthorize if needed
 
 connection_attempts=0
 until exec 4<>/dev/tcp/"$REDIS_HOST"/"$REDIS_PORT"; do
@@ -253,6 +380,7 @@ fi
 
 
 if acquire-lock 4; then
+  # ensure that we always try to release lock no mather what
   trap "release-lock 4" EXIT
 
   # execute commands
