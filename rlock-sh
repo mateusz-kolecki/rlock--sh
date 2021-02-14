@@ -15,10 +15,10 @@ REDIS_HOST=${REDIS_HOST:-127.0.0.1}
 REDIS_PORT=${REDIS_PORT:-6379}
 REDIS_DB=${REDIS_DB:-}
 REDIS_AUTH=${REDIS_AUTH:-}
-REDIS_CON_MAX_RETRY=${CON_MAX_RETRY:-60}
+REDIS_CON_MAX_RETRY=${REDIS_CON_MAX_RETRY:-60}
 
-LOCK_KEY=${REDIS_LOCK_KEY:-rlock-sh}
-LOCK_TTL=${REDIS_LOCK_TTL:-300}
+LOCK_KEY=${LOCK_KEY:-rlock-sh}
+LOCK_TTL=${LOCK_TTL:-300}
 LOCK_ACQUIRE_TIMEOUT=${LOCK_ACQUIRE_TIMEOUT:-150}
 LOCK_ACQUIRE_SLEEP=${LOCK_ACQUIRE_SLEEP:-1}
 
@@ -38,26 +38,28 @@ Usage:
 
 Options:
 
-  -h|--help                        Show this usage help
-  -v|--verbose                     Print debug information on stderr
+  -h|--help                 Show this usage help
+  -v|--verbose              Print debug information on stderr
 
-  -l|--lock-name=REDIS_LOCK_KEY    (string) Name of the key that will be created (default: rlock-sh)
-  -t|--lock-ttl=REDIS_LOCK_TTL     (int) Number of seconds for lock TTL (default: 300)
+  -l|--lock-name=LOCK_KEY   (string) Name of the key that will be created (default: $LOCK_KEY)
+  -t|--lock-ttl=LOCK_TTL    (int) Number of seconds for lock TTL (default: $LOCK_TTL)
 
-  -H|--host=REDIS_HOST             (string) Redis host name or ip (default: 127.0.0.1)
-  -p|--port=REDIS_PORT             (int) Redis TCP port (default: 6379)
-  -d|--database=REDIS_DB           (int) Redis database to select (default: none)
-  -a|--auth=REDIS_AUTH             (string) Redis authentication (default: none)
+  -H|--host=REDIS_HOST      (string) Redis host name or ip (default: $REDIS_HOST)
+  -p|--port=REDIS_PORT      (int) Redis TCP port (default: $REDIS_PORT)
+  -d|--database=REDIS_DB    (int) Redis database to select (default: none)
+  -a|--auth=REDIS_AUTH      (string) Redis authentication (default: none)
 
-  -r|--connect-max-retry=CON_MAX_RETRY
-                                   (int) Maximum number of connection attempts (default: 60)
+  -r|--connect-max-retry=REDIS_CON_MAX_RETRY
+                            (int) Maximum number of connection attempts (default: $REDIS_CON_MAX_RETRY)
 
   -T|--acquire-timeout=LOCK_ACQUIRE_TIMEOUT
-                                   (int) Temeout for acquiring lock in seconds (default: 60)
+                            (int) Temeout for acquiring lock in seconds (default: $LOCK_ACQUIRE_TIMEOUT)
 
   -S|--acquire-sleep=LOCK_ACQUIRE_SLEEP
-                                   (int|float) Time in second to sleep betwean lock acquire retries (default: 60)
-                                   Not on every system \`sleep\` command can receive fraction. See man pages for sleep on your system.
+                            (int|float) Time in second to sleep betwean lock acquire retries
+                            (default: $LOCK_ACQUIRE_SLEEP)
+                            Not on every system \`sleep\` command can receive fraction.
+                            See man pages for sleep on your system.
 EOF
 }
 
