@@ -60,6 +60,20 @@ Options:
                             (default: $LOCK_ACQUIRE_SLEEP)
                             Not on every system \`sleep\` command can receive fraction.
                             See man pages for sleep on your system.
+
+Majority of options can be set by environment variables.
+Here is the list (compare that with options above):
+
+  - REDIS_HOST
+  - REDIS_PORT
+  - REDIS_DB
+  - REDIS_AUTH
+  - REDIS_CON_MAX_RETRY
+  - LOCK_KEY
+  - LOCK_TTL
+  - LOCK_ACQUIRE_TIMEOUT
+  - LOCK_ACQUIRE_SLEEP
+
 EOF
 }
 
