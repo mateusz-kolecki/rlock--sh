@@ -27,34 +27,38 @@ VERBOSE=''
 NAME=$(basename $0)
 
 function show-usage {
-  echo "Usage:"
-  echo
-  echo "  $NAME [options...] [cmd] [cmd options...]"
-  echo "  $NAME [options...] -- [cmd] [cmd options...]"
-  echo
-  echo "Options:"
-  echo
-  echo "  -h|--help                        Show this usage help"
-  echo "  -v|--verbose                     Print debug information on stderr"
-  echo
-  echo "  -l|--lock-name=REDIS_LOCK_KEY    (string) Name of the key that will be created (default: $LOCK_KEY)"
-  echo "  -t|--lock-ttl=REDIS_LOCK_TTL     (int) Number of seconds for lock TTL (default: $LOCK_TTL)"
-  echo
-  echo "  -H|--host=REDIS_HOST             (string) Redis host name or ip (default: $REDIS_HOST)"
-  echo "  -p|--port=REDIS_PORT             (int) Redis TCP port (default: $REDIS_PORT)"
-  echo "  -d|--database=REDIS_DB           (int) Redis database to select (default: none)"
-  echo "  -a|--auth=REDIS_AUTH             (string) Redis authentication (default: none)"
-  echo
-  echo "  -r|--connect-max-retry=CON_MAX_RETRY"
-  echo "                                   (int) Maximum number of connection attempts (default: $REDIS_CON_MAX_RETRY)"
-  echo
-  echo "  -T|--acquire-timeout=LOCK_ACQUIRE_TIMEOUT"
-  echo "                                   (int) Temeout for acquiring lock in seconds (default: $REDIS_CON_MAX_RETRY)"
-  echo
-  echo "  -S|--acquire-sleep=LOCK_ACQUIRE_SLEEP"
-  echo "                                   (int|float) Time in second to sleep betwean lock acquire retries (default: $REDIS_CON_MAX_RETRY)"
-  echo "                                   Not on every system \`sleep\` command can receive fraction. See man pages for sleep on your system."
-  echo
+  cat <<EOF
+Usage:
+
+  rlock-sh [OPTIONS...] [CMD] [CMD OPTIONS...]
+  rlock-sh [OPTIONS...] -- [CMD] [CMD OPTIONS...]
+
+  Acquire lock by creating key in Redis using NX flag. After acquiring lock execure CMD.
+  When CMD finishes then lock is released by removing key.
+
+Options:
+
+  -h|--help                        Show this usage help
+  -v|--verbose                     Print debug information on stderr
+
+  -l|--lock-name=REDIS_LOCK_KEY    (string) Name of the key that will be created (default: rlock-sh)
+  -t|--lock-ttl=REDIS_LOCK_TTL     (int) Number of seconds for lock TTL (default: 300)
+
+  -H|--host=REDIS_HOST             (string) Redis host name or ip (default: 127.0.0.1)
+  -p|--port=REDIS_PORT             (int) Redis TCP port (default: 6379)
+  -d|--database=REDIS_DB           (int) Redis database to select (default: none)
+  -a|--auth=REDIS_AUTH             (string) Redis authentication (default: none)
+
+  -r|--connect-max-retry=CON_MAX_RETRY
+                                   (int) Maximum number of connection attempts (default: 60)
+
+  -T|--acquire-timeout=LOCK_ACQUIRE_TIMEOUT
+                                   (int) Temeout for acquiring lock in seconds (default: 60)
+
+  -S|--acquire-sleep=LOCK_ACQUIRE_SLEEP
+                                   (int|float) Time in second to sleep betwean lock acquire retries (default: 60)
+                                   Not on every system \`sleep\` command can receive fraction. See man pages for sleep on your system.
+EOF
 }
 
 

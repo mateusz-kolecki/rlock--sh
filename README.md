@@ -36,8 +36,11 @@ rlock-sh: releasing lock
 ```
 Usage:
 
-  rlock-sh [options...] [cmd] [cmd options...]
-  rlock-sh [options...] -- [cmd] [cmd options...]
+  rlock-sh [OPTIONS...] [CMD] [CMD OPTIONS...]
+  rlock-sh [OPTIONS...] -- [CMD] [CMD OPTIONS...]
+
+  Acquire lock by creating key in Redis using NX flag. After acquiring lock execure CMD.
+  When CMD finishes then lock is released by removing key.
 
 Options:
 
