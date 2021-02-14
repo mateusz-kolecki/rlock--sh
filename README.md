@@ -7,7 +7,7 @@ Utility similar to `flock` but works with Redis as backend and it is implemented
 Example usage. Run this in two terminals in same time:
 
 ```bash
-rlock-sh -v -h 127.0.0.1 -p 6379 -l my-lock-key-name bash <<EOF
+rlock-sh -v -H 127.0.0.1 -p 6379 -l my-lock-key-name bash <<EOF
     echo Those lines are synchronized
     sleep 10
 EOF
