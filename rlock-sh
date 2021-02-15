@@ -38,24 +38,24 @@ Usage:
 
 Options:
 
-  -h|--help                 Show this usage help
-  -v|--verbose              Print debug information on stderr
+  -h, --help                 Show this usage help
+  -v, --verbose              Print debug information on stderr
 
-  -l|--lock-name=LOCK_KEY   (string) Name of the key that will be created (default: $LOCK_KEY)
-  -t|--lock-ttl=LOCK_TTL    (int) Number of seconds for lock TTL (default: $LOCK_TTL)
+  -l, --lock-name=LOCK_KEY   (string) Name of the key that will be created (default: $LOCK_KEY)
+  -t, --lock-ttl=LOCK_TTL    (int) Number of seconds for lock TTL (default: $LOCK_TTL)
 
-  -H|--host=REDIS_HOST      (string) Redis host name or ip (default: $REDIS_HOST)
-  -p|--port=REDIS_PORT      (int) Redis TCP port (default: $REDIS_PORT)
-  -d|--database=REDIS_DB    (int) Redis database to select (default: none)
-  -a|--auth=REDIS_AUTH      (string) Redis authentication (default: none)
+  -H, --host=REDIS_HOST      (string) Redis host name or ip (default: $REDIS_HOST)
+  -p, --port=REDIS_PORT      (int) Redis TCP port (default: $REDIS_PORT)
+  -d, --database=REDIS_DB    (int) Redis database to select (default: none)
+  -a, --auth=REDIS_AUTH      (string) Redis authentication (default: none)
 
-  -r|--connect-max-retry=REDIS_CON_MAX_RETRY
+  -r, --connect-max-retry=REDIS_CON_MAX_RETRY
                             (int) Maximum number of connection attempts (default: $REDIS_CON_MAX_RETRY)
 
-  -T|--acquire-timeout=LOCK_ACQUIRE_TIMEOUT
+  -T, --acquire-timeout=LOCK_ACQUIRE_TIMEOUT
                             (int) Temeout for acquiring lock in seconds (default: $LOCK_ACQUIRE_TIMEOUT)
 
-  -S|--acquire-sleep=LOCK_ACQUIRE_SLEEP
+  -S, --acquire-sleep=LOCK_ACQUIRE_SLEEP
                             (int|float) Time in second to sleep betwean lock acquire retries
                             (default: $LOCK_ACQUIRE_SLEEP)
                             Not on every system \`sleep\` command can receive fraction.
@@ -248,7 +248,7 @@ function redis-read {
 
   if [ ${#REPLY} -eq 0 ]; then
       echo "ERROR: no reply" >&2
-      exit 1
+      return 1
   fi
 
   REPLY=${REPLY:0:${#REPLY}-1}
@@ -306,7 +306,12 @@ function acquire-lock {
   while [ $LOCK_ACQUIRE_TIMEOUT -eq 0 ] || [ $time_trying -lt $LOCK_ACQUIRE_TIMEOUT ]; do
 
     # Acquire lock by creating key with SET using NX flag which fails if key already exists
-    response=$(redis-cmd $fd SET $LOCK_KEY $RANDOM_TOKEN NX PX $lock_ttl_mili)
+    if ! response=$(redis-cmd $fd SET $LOCK_KEY $RANDOM_TOKEN NX PX $lock_ttl_mili); then
+      if [ "$response" = "" ]; then
+        echo "rlock-sh: disconected" >&2
+        exit 1;
+      fi
+    fi
 
     if [ "$response" = "OK" ]; then
       # success!
