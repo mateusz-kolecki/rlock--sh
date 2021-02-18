@@ -404,13 +404,12 @@ if [ "${REDIS_DB}" != "" ]; then
 fi
 
 
-if acquire-lock 4; then
-  # ensure that we always try to release lock no mather what
-  trap "release-lock 4" EXIT
-
-  # execute commands
-  "$@"
+if ! acquire-lock 4; then
+  exit 1
 fi
 
+# ensure that we always try to release lock no mather what
+trap "release-lock 4" EXIT
 
-
+# execute commands
+"$@"
