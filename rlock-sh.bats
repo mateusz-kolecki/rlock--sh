@@ -13,6 +13,19 @@ function fake_redis_success_flow {
     printf '%s\r\n' "${redis_responses[@]}" | nc -l 1234 > ${BATS_TMPDIR}/input.log
 }
 
+function fake_redis_lock_exists_responses {
+    while read line; do
+        if [[ "$line" =~ "101010" ]]; then
+            printf '$-1\r\n'
+        fi
+    done
+}
+
+export -f fake_redis_lock_exists_responses
+
+
+
+
 @test "invoking with --help should display uage" {
     run main --help
 
@@ -78,4 +91,15 @@ function fake_redis_success_flow {
     )
 
     assert_output --regexp ^$(printf '%s\r\n' ${expected_lines[@]})
+}
+
+@test "when acquire timeout then do not run CMD" {
+    nc -c fake_redis_lock_exists_responses -l 1234 &
+
+    run main -v -p 1234 -t 101010 -T 2 -- -- echo 'should not be there'
+
+    assert_failure
+
+    refute_output --partial 'should not be there'
+    assert_output --partial 'rlock-sh: ERROR acquire lock timeout'
 }
