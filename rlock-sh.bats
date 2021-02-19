@@ -3,7 +3,7 @@
 load './node_modules/bats-support/load.bash'
 load './node_modules/bats-assert/load.bash'
 
-function main {
+function rlock-sh {
     bash ${BATS_TEST_DIRNAME}/rlock-sh "$@"
 }
 
@@ -27,14 +27,14 @@ function fake_redis_lock_exists_responses {
 
 
 @test "invoking with --help should display uage" {
-    run main --help
+    run rlock-sh --help
 
     assert_success
     assert_line --index 0 "Usage:"
 }
 
 @test "invoking with -h should display uage" {
-    run main -h
+    run rlock-sh -h
 
     assert_success
     assert_line --index 0 "Usage:"
@@ -42,8 +42,9 @@ function fake_redis_lock_exists_responses {
 
 @test "with no CMD lock is created and released (short options)" {
     fake_redis_success_flow &
+    sleep 1
 
-    run main -v -p 1234
+    run rlock-sh -v -p 1234
 
     assert_success
 
@@ -54,8 +55,9 @@ function fake_redis_lock_exists_responses {
 
 @test "with no CMD lock is created and released (long options)" {
     fake_redis_success_flow &
+    sleep 1
 
-    run main --verbose --port 1234
+    run rlock-sh --verbose --port 1234
 
     assert_success
 
@@ -66,8 +68,9 @@ function fake_redis_lock_exists_responses {
 
 @test "with provided CMD lock is created and released after command execution (long options)" {
     fake_redis_success_flow &
+    sleep 1
 
-    run main --verbose --port 1234 -- bash -c 'echo "command output"'
+    run rlock-sh --verbose --port 1234 -- bash -c 'echo "command output"'
 
     assert_success
 
@@ -80,8 +83,9 @@ function fake_redis_lock_exists_responses {
 
 @test "creates key given by option --lock-name" {
     fake_redis_success_flow &
+    sleep 1
 
-    main --verbose --port 1234 --lock-name foo-bar
+    rlock-sh --verbose --port 1234 --lock-name foo-bar
 
     run cat ${BATS_TMPDIR}/input.log
 
@@ -95,8 +99,9 @@ function fake_redis_lock_exists_responses {
 
 @test "when acquire timeout then do not run CMD" {
     fake_redis_lock_exists_responses &
+    sleep 1
 
-    run main -v -p 1234 -t 101010 -T 2 -- -- echo 'should not be there'
+    run rlock-sh -v -p 1234 -t 101010 -T 2 -- -- echo 'should not be there'
 
     assert_failure
 
