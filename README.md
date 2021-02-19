@@ -1,6 +1,8 @@
-# Work in progress.
+# rlock-sh
 
-## rlock-sh
+![master build status](https://github.com/mateusz-kolecki/rlock-sh/workflows/CI/badge.svg?branch=master)
+
+---
 
 Utility similar to `flock` but works with Redis as backend and it is implemented in bash.
 
@@ -44,24 +46,24 @@ Usage:
 
 Options:
 
-  -h|--help                 Show this usage help
-  -v|--verbose              Print debug information on stderr
+  -h, --help                 Show this usage help
+  -v, --verbose              Print debug information on stderr
 
-  -l|--lock-name=LOCK_KEY   (string) Name of the key that will be created (default: rlock-sh)
-  -t|--lock-ttl=LOCK_TTL    (int) Number of seconds for lock TTL (default: 300)
+  -l, --lock-name=LOCK_KEY   (string) Name of the key that will be created (default: rlock-sh)
+  -t, --lock-ttl=LOCK_TTL    (int) Number of seconds for lock TTL (default: 300)
 
-  -H|--host=REDIS_HOST      (string) Redis host name or ip (default: 127.0.0.1)
-  -p|--port=REDIS_PORT      (int) Redis TCP port (default: 6379)
-  -d|--database=REDIS_DB    (int) Redis database to select (default: none)
-  -a|--auth=REDIS_AUTH      (string) Redis authentication (default: none)
+  -H, --host=REDIS_HOST      (string) Redis host name or ip (default: 127.0.0.1)
+  -p, --port=REDIS_PORT      (int) Redis TCP port (default: 6379)
+  -d, --database=REDIS_DB    (int) Redis database to select (default: none)
+  -a, --auth=REDIS_AUTH      (string) Redis authentication (default: none)
 
-  -r|--connect-max-retry=REDIS_CON_MAX_RETRY
+  -r, --connect-max-retry=REDIS_CON_MAX_RETRY
                             (int) Maximum number of connection attempts (default: 60)
 
-  -T|--acquire-timeout=LOCK_ACQUIRE_TIMEOUT
+  -T, --acquire-timeout=LOCK_ACQUIRE_TIMEOUT
                             (int) Temeout for acquiring lock in seconds (default: 150)
 
-  -S|--acquire-sleep=LOCK_ACQUIRE_SLEEP
+  -S, --acquire-sleep=LOCK_ACQUIRE_SLEEP
                             (int|float) Time in second to sleep betwean lock acquire retries
                             (default: 1)
                             Not on every system `sleep` command can receive fraction.
@@ -79,7 +81,5 @@ Here is the list (compare that with options above):
   - LOCK_TTL
   - LOCK_ACQUIRE_TIMEOUT
   - LOCK_ACQUIRE_SLEEP
-
-
 ```
 
