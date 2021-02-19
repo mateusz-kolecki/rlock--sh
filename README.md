@@ -4,9 +4,11 @@
 
 ---
 
-Utility similar to `flock` but works with Redis as backend and it is implemented in bash.
+Execute bash commands only when lock is acquired in Redis.
 
-Example usage. Run this in two terminals in same time:
+Utility similar to `flock` but works with Redis as backend, and it is implemented purely in `bash`.
+
+Example usage. Run this in two terminals in the same time:
 
 ```bash
 rlock-sh -v -H 127.0.0.1 -p 6379 -l my-lock-key-name bash <<EOF
@@ -32,6 +34,35 @@ rlock-sh: lock acquired after 10 seconds
 Those lines are synchronized
 rlock-sh: releasing lock
 ```
+
+## Install
+
+`rlock-sh` is self-contained bash script with no runtime dependency other than Redis.
+Copy that file to location in your `$PATH` and enable the executable flag.
+
+```
+curl https://raw.githubusercontent.com/mateusz-kolecki/rlock-sh/master/rlock-sh | sudo tee /usr/bin/rlock-sh
+sudo chmod +x /usr/bin/rlock-sh
+```
+
+## How it works?
+
+Script follows "*Correct implementation with a single instance*" form this https://redis.io/topics/distlock
+Redis documentation.
+
+Long story short, script execute those steps in green path:
+
+  * Connect to Redis with `bash` build-in tcp capabilities (no `nc` required)
+  * Send `SET key-name random-value NX PX 30000` command
+    * `NX` option make this command to fail when key already exists (other process already acquired lock)
+    * repeat that in a loop (until a timeout)
+  * When key is created (lock acquired) then given command is executed
+  * After command finishes `key-name` key is deleted (some special care is done, read link above). 
+
+## Where it can be useful?
+
+I'm using this in my `k8s` production environment to synchronize multiple replicas of my pod in
+initialization stage - only one container at once can execute DB migrations. 
 
 ## Help:
 
