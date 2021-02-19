@@ -14,16 +14,16 @@ function fake_redis_success_flow {
 }
 
 function fake_redis_lock_exists_responses {
-    while read line; do
+    mkfifo ${BATS_TMPDIR}/fifo
+
+    nc -l 1234 < ${BATS_TMPDIR}/fifo | (while read line; do
         if [[ "$line" =~ "101010" ]]; then
             printf '$-1\r\n'
         fi
-    done
+    done >> ${BATS_TMPDIR}/fifo )
+
+    rm -f ${BATS_TMPDIR}/fifo
 }
-
-export -f fake_redis_lock_exists_responses
-
-
 
 
 @test "invoking with --help should display uage" {
@@ -94,7 +94,7 @@ export -f fake_redis_lock_exists_responses
 }
 
 @test "when acquire timeout then do not run CMD" {
-    nc -c fake_redis_lock_exists_responses -l 1234 &
+    fake_redis_lock_exists_responses &
 
     run main -v -p 1234 -t 101010 -T 2 -- -- echo 'should not be there'
 
